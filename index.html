@@ -3,93 +3,101 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Redirection...</title>
-<meta name="robots" content="noindex">
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    margin: 0;
-    background: #f5f6fb;
-    color: #1f2330;
-    text-align: center;
-    padding: 20px;
-  }
-  .box { max-width: 360px; }
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid #e5e7eb;
-    border-top-color: #4f46e5;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 16px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  a { color: #4f46e5; word-break: break-all; }
-</style>
+<title>QRafty Clone - Générateur de QR Code</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
 <body>
-<div class="box">
-  <div class="spinner"></div>
-  <p id="msg">Redirection en cours...</p>
+<div class="container">
+  <header class="header">
+    <h1>🔳 QR Generator</h1>
+    <p class="subtitle">Générez, personnalisez et suivez vos QR codes</p>
+  </header>
+
+  <main class="main-grid">
+    <section class="panel">
+      <h2>Configuration</h2>
+
+      <label for="urlInput">URL à encoder</label>
+      <input type="url" id="urlInput" placeholder="https://exemple.com" value="https://exemple.com">
+
+      <div class="color-row">
+        <div class="color-group">
+          <label for="fgColor">Couleur des modules (noir)</label>
+          <div class="color-input-wrap">
+            <input type="color" id="fgColor" value="#000000">
+            <input type="text" id="fgColorText" value="#000000" maxlength="7">
+          </div>
+        </div>
+
+        <div class="color-group">
+          <label for="bgColor">Couleur du fond (blanc)</label>
+          <div class="color-input-wrap">
+            <input type="color" id="bgColor" value="#ffffff">
+            <input type="text" id="bgColorText" value="#ffffff" maxlength="7">
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="transparentBg">
+            Fond transparent
+          </label>
+        </div>
+      </div>
+
+      <label for="qrSize">Niveau de correction d'erreur</label>
+      <select id="errorLevel">
+        <option value="L">L - Faible (7%)</option>
+        <option value="M" selected>M - Moyen (15%)</option>
+        <option value="Q">Q - Élevé (25%)</option>
+        <option value="H">H - Maximum (30%)</option>
+      </select>
+
+      <div class="tracking-toggle">
+        <label class="checkbox-label">
+          <input type="checkbox" id="enableTracking" checked>
+          Activer le suivi des scans (lien traçable)
+        </label>
+        <p class="hint">Si activé, le QR code encodera une URL de redirection traçable au lieu de l'URL directe.</p>
+      </div>
+
+      <button id="generateBtn" class="btn-primary">Générer le QR Code</button>
+    </section>
+
+    <section class="panel preview-panel">
+      <h2>Aperçu</h2>
+      <div id="qrPreview" class="qr-preview"></div>
+
+      <div class="download-row">
+        <button id="downloadPng" class="btn-secondary" disabled>Télécharger PNG (2000x2000)</button>
+        <button id="downloadSvg" class="btn-secondary" disabled>Télécharger SVG</button>
+      </div>
+
+      <div id="trackingInfo" class="tracking-info hidden">
+        <p><strong>Lien traçable :</strong> <span id="trackingLink"></span></p>
+        <p class="hint">Ce lien encodé redirige vers votre URL tout en comptant les scans.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="panel history-panel">
+    <h2>📊 Historique & statistiques</h2>
+    <div id="historyEmpty" class="empty-state">Aucun QR code généré pour le moment.</div>
+    <table id="historyTable" class="history-table hidden">
+      <thead>
+        <tr>
+          <th>URL cible</th>
+          <th>Date de création</th>
+          <th>Lien traçable</th>
+          <th>Scans</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </section>
 </div>
 
-<script>
-// ==========================================================
-// Page de redirection traçable (statique, compatible GitHub Pages)
-// URL attendue: r/index.html?id=<id>&to=<urlEncodedTargetUrl>
-//
-// - "id"  : identifiant unique du QR code, utilisé comme clé de comptage
-//           via l'API CounterAPI v2 (https://counterapi.dev) - service
-//           gratuit, sans authentification, basé sur des compteurs simples.
-// - "to"  : URL cible encodée (encodeURIComponent), vers laquelle on redirige.
-//
-// Sécurité: seules les URLs http(s) sont acceptées comme cible, afin
-// d'empêcher tout détournement vers des schémas dangereux (javascript:, etc).
-// ==========================================================
+<canvas id="renderCanvas" style="display:none;"></canvas>
 
-const COUNTER_WORKSPACE = 'qrgen-tracker-v1'; // doit correspondre à script.js
-
-const params = new URLSearchParams(window.location.search);
-const id = params.get('id');
-const target = params.get('to');
-const msg = document.getElementById('msg');
-
-function isSafeHttpUrl(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function redirect() {
-  if (target && isSafeHttpUrl(target)) {
-    window.location.replace(target);
-  } else {
-    msg.textContent = 'Lien invalide ou manquant.';
-  }
-}
-
-if (!id || !target) {
-  msg.textContent = 'Lien invalide.';
-} else if (!isSafeHttpUrl(target)) {
-  msg.textContent = 'URL cible non autorisée.';
-} else {
-  // Increment the scan counter (fire-and-forget), then redirect regardless
-  // of whether the counting succeeds, so the user is never blocked.
-  fetch(`https://api.counterapi.dev/v2/${COUNTER_WORKSPACE}/${encodeURIComponent(id)}/up`)
-    .catch(() => { /* counting failed silently, redirect anyway */ })
-    .finally(redirect);
-
-  // Safety net: redirect after 2s even if the network call hangs
-  setTimeout(redirect, 2000);
-}
-</script>
+<script src="script.js"></script>
 </body>
 </html>
