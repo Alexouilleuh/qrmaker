@@ -3,7 +3,9 @@
 // ==========================================================
 
 const REDIRECT_BASE = window.location.origin + window.location.pathname.replace(/index\.html$/, '') + 'r/index.html';
-const COUNTAPI_NAMESPACE = 'qrgen-tracker-v1';
+// CounterAPI v2 (https://counterapi.dev) - service de compteurs gratuit, actif en 2025+
+const COUNTER_WORKSPACE = 'qrgen-tracker-v1';
+const COUNTER_API_BASE = 'https://api.counterapi.dev/v2';
 
 const urlInput = document.getElementById('urlInput');
 const fgColor = document.getElementById('fgColor');
@@ -176,8 +178,9 @@ generateBtn.addEventListener('click', () => {
     trackingLink.textContent = trackUrl;
     trackingInfo.classList.remove('hidden');
 
-    // Initialize the counter on CountAPI at 0 so it exists for future GETs.
-    fetch(`https://api.countapi.xyz/create?namespace=${COUNTAPI_NAMESPACE}&key=${encodeURIComponent(id)}&value=0`)
+    // Touch the counter so it exists (CounterAPI creates it on first read,
+    // without incrementing, when using the GET endpoint).
+    fetch(`${COUNTER_API_BASE}/${COUNTER_WORKSPACE}/${encodeURIComponent(id)}`)
       .catch(() => { /* non-blocking */ });
   } else {
     trackingInfo.classList.add('hidden');
@@ -249,14 +252,15 @@ async function fetchScanCounts() {
 
   let changed = false;
 
-  // CountAPI doesn't support batch reads, so query each id individually.
   await Promise.all(history.map(async (h) => {
     try {
-      const res = await fetch(`https://api.countapi.xyz/get/${COUNTAPI_NAMESPACE}/${encodeURIComponent(h.id)}`);
+      const res = await fetch(`${COUNTER_API_BASE}/${COUNTER_WORKSPACE}/${encodeURIComponent(h.id)}`);
       if (!res.ok) return;
       const data = await res.json();
-      if (typeof data.value === 'number' && data.value !== h.scans) {
-        h.scans = data.value;
+      // CounterAPI v2 returns { data: { up_count, down_count, count, ... } }
+      const value = data?.data?.up_count ?? data?.data?.count;
+      if (typeof value === 'number' && value !== h.scans) {
+        h.scans = value;
         changed = true;
       }
     } catch {
