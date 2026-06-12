@@ -2,7 +2,8 @@
 // QRafty Clone - Générateur de QR Code avec tracking
 // ==========================================================
 
-const REDIRECT_BASE = window.location.origin + window.location.pathname.replace(/index\.html$/, '') + 'r/';
+const REDIRECT_BASE = window.location.origin + window.location.pathname.replace(/index\.html$/, '') + 'r/index.html';
+const COUNTAPI_NAMESPACE = 'qrgen-tracker-v1';
 
 const urlInput = document.getElementById('urlInput');
 const fgColor = document.getElementById('fgColor');
@@ -156,7 +157,7 @@ generateBtn.addEventListener('click', () => {
 
   if (tracking) {
     const id = genId();
-    const trackUrl = REDIRECT_BASE + id;
+    const trackUrl = REDIRECT_BASE + '?id=' + encodeURIComponent(id) + '&to=' + encodeURIComponent(validUrl.toString());
     encodedTarget = trackUrl;
 
     entry = {
@@ -175,15 +176,9 @@ generateBtn.addEventListener('click', () => {
     trackingLink.textContent = trackUrl;
     trackingInfo.classList.remove('hidden');
 
-    // Register on backend so the redirect endpoint knows the target URL
-    fetch('register.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, url: validUrl.toString() })
-    }).catch(() => {
-      // Backend unreachable (e.g. static-only hosting). The QR will still
-      // display, but the tracking link won't redirect until a backend is set up.
-    });
+    // Initialize the counter on CountAPI at 0 so it exists for future GETs.
+    fetch(`https://api.countapi.xyz/create?namespace=${COUNTAPI_NAMESPACE}&key=${encodeURIComponent(id)}&value=0`)
+      .catch(() => { /* non-blocking */ });
   } else {
     trackingInfo.classList.add('hidden');
   }
@@ -248,33 +243,31 @@ downloadPng.addEventListener('click', () => {
 });
 
 // --- History rendering ---
-function fetchScanCounts() {
-  // Fetch real scan counts from backend (stats.php)
+async function fetchScanCounts() {
   const history = loadHistory();
   if (history.length === 0) return;
 
-  const ids = history.map(h => h.id).join(',');
-  fetch('stats.php?ids=' + encodeURIComponent(ids))
-    .then(res => {
-      if (!res.ok) throw new Error('stats unavailable');
-      return res.json();
-    })
-    .then(counts => {
-      let changed = false;
-      history.forEach(h => {
-        if (counts[h.id] !== undefined && counts[h.id] !== h.scans) {
-          h.scans = counts[h.id];
-          changed = true;
-        }
-      });
-      if (changed) {
-        saveHistory(history);
-        renderHistory();
+  let changed = false;
+
+  // CountAPI doesn't support batch reads, so query each id individually.
+  await Promise.all(history.map(async (h) => {
+    try {
+      const res = await fetch(`https://api.countapi.xyz/get/${COUNTAPI_NAMESPACE}/${encodeURIComponent(h.id)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.value === 'number' && data.value !== h.scans) {
+        h.scans = data.value;
+        changed = true;
       }
-    })
-    .catch(() => {
-      // Backend not available (e.g. static hosting) - keep local values
-    });
+    } catch {
+      // ignore network errors, keep last known value
+    }
+  }));
+
+  if (changed) {
+    saveHistory(history);
+    renderHistory();
+  }
 }
 
 function renderHistory() {

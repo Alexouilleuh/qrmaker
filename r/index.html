@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redirection...</title>
+<meta name="robots" content="noindex">
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background: #f5f6fb;
+    color: #1f2330;
+    text-align: center;
+    padding: 20px;
+  }
+  .box { max-width: 360px; }
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #4f46e5;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  a { color: #4f46e5; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spinner"></div>
+  <p id="msg">Redirection en cours...</p>
+</div>
+
+<script>
+// ==========================================================
+// Page de redirection traçable (statique, compatible GitHub Pages)
+// URL attendue: r/index.html?id=<id>&to=<urlEncodedTargetUrl>
+//
+// - "id"  : identifiant unique du QR code, utilisé comme clé de comptage
+//           via l'API CountAPI (https://countapi.xyz) - service gratuit,
+//           sans authentification, basé sur des compteurs atomiques.
+// - "to"  : URL cible encodée (encodeURIComponent), vers laquelle on redirige.
+//
+// Sécurité: seules les URLs http(s) sont acceptées comme cible, afin
+// d'empêcher tout détournement vers des schémas dangereux (javascript:, etc).
+// ==========================================================
+
+const NAMESPACE = 'qrgen-tracker-v1'; // namespace CountAPI dédié à ce projet
+
+const params = new URLSearchParams(window.location.search);
+const id = params.get('id');
+const target = params.get('to');
+const msg = document.getElementById('msg');
+
+function isSafeHttpUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function redirect() {
+  if (target && isSafeHttpUrl(target)) {
+    window.location.replace(target);
+  } else {
+    msg.textContent = 'Lien invalide ou manquant.';
+  }
+}
+
+if (!id || !target) {
+  msg.textContent = 'Lien invalide.';
+} else if (!isSafeHttpUrl(target)) {
+  msg.textContent = 'URL cible non autorisée.';
+} else {
+  // Increment the scan counter (fire-and-forget), then redirect regardless
+  // of whether the counting succeeds, so the user is never blocked.
+  fetch(`https://api.countapi.xyz/hit/${NAMESPACE}/${encodeURIComponent(id)}`)
+    .catch(() => { /* counting failed silently, redirect anyway */ })
+    .finally(redirect);
+
+  // Safety net: redirect after 2s even if the network call hangs
+  setTimeout(redirect, 2000);
+}
+</script>
+</body>
+</html>

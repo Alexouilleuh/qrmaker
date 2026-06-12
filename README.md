@@ -1,8 +1,11 @@
-# QR Generator avec Tracking
+# QR Generator avec Tracking (100% statique - GitHub Pages)
 
 Générateur de QR Code (URL) avec personnalisation des couleurs, export
 SVG/PNG haute résolution (2000x2000), et suivi des scans par QR code
 (nombre de scans, URL cible, date de création).
+
+Aucun backend requis : tout est en HTML/CSS/JS pur, déployable directement
+sur GitHub Pages.
 
 ## Structure
 
@@ -11,65 +14,57 @@ qrafty/
 ├── index.html      # Page principale
 ├── style.css       # Styles
 ├── script.js       # Logique frontend (génération QR, export, historique)
-├── db.php          # Connexion SQLite partagée
-├── register.php    # API: enregistre un nouveau QR traçable
-├── stats.php       # API: retourne le nombre de scans par id
-├── r/
-│   ├── index.php   # Endpoint de redirection traçable (/r/{id})
-│   └── .htaccess   # Réécriture d'URL pour /r/{id}
-└── data/           # Base SQLite (créée automatiquement)
+└── r/
+    └── index.html  # Page de redirection traçable
 ```
-
-## Prérequis serveur
-
-- PHP 7.4+ avec l'extension `pdo_sqlite` activée.
-- Apache avec `mod_rewrite` activé (pour `.htaccess` dans `r/`).
-  - Sur Nginx, remplacer `.htaccess` par une règle équivalente:
-    ```
-    location /r/ {
-        rewrite ^/r/([a-zA-Z0-9]+)/?$ /r/index.php?id=$1 last;
-    }
-    ```
-
-## Déploiement
-
-1. Copier tout le dossier `qrafty/` sur votre hébergement PHP.
-2. S'assurer que le dossier `data/` est accessible en écriture par PHP
-   (`chmod 755 data` généralement suffisant; PHP créera le fichier
-   `tracking.sqlite` au premier appel).
-3. Idéalement, placer `data/` hors de la racine web publique, ou protéger
-   son accès via `.htaccess` (`Deny from all`).
 
 ## Fonctionnement du tracking
 
-1. Lorsque "Activer le suivi des scans" est cochée, le frontend:
-   - génère un identifiant unique côté client,
-   - encode dans le QR code une URL de la forme `https://votre-domaine/r/<id>`,
-   - envoie l'URL cible et l'id à `register.php` (stockage dans SQLite).
-2. Lorsqu'un utilisateur scanne le QR code, son téléphone ouvre `/r/<id>`,
-   qui:
-   - incrémente le compteur de scans pour cet id,
-   - enregistre un horodatage dans la table `scans`,
-   - redirige (HTTP 302) vers l'URL cible réelle.
-3. Le frontend interroge périodiquement `stats.php?ids=...` pour rafraîchir
-   les compteurs de scans affichés dans l'historique.
+Le comptage des scans est assuré par **CountAPI** (https://countapi.xyz),
+un service public gratuit fournissant des compteurs atomiques via une
+simple requête HTTP GET, sans authentification ni configuration.
+
+1. Quand "Activer le suivi des scans" est cochée, le frontend génère un
+   identifiant unique (`id`) et encode dans le QR code une URL de la forme :
+   ```
+   https://votre-domaine/r/index.html?id=<id>&to=<url-cible-encodée>
+   ```
+2. Un compteur CountAPI est initialisé à 0 pour cet `id` (namespace
+   `qrgen-tracker-v1`).
+3. Quand quelqu'un scanne le QR code, `r/index.html` :
+   - incrémente le compteur via `https://api.countapi.xyz/hit/<namespace>/<id>`,
+   - redirige immédiatement (JS `location.replace`) vers l'URL cible.
+4. Le frontend interroge périodiquement
+   `https://api.countapi.xyz/get/<namespace>/<id>` pour rafraîchir le
+   nombre de scans affiché dans l'historique.
+
+## Déploiement sur GitHub Pages
+
+1. Pousser le contenu du dossier `qrafty/` à la racine du repo (ou dans
+   `/docs`, selon votre configuration Pages).
+2. Activer GitHub Pages dans les paramètres du repo.
+3. C'est tout — aucune configuration serveur, aucune base de données.
 
 ## Sécurité
 
-- Toute URL fournie est validée (`FILTER_VALIDATE_URL` + schéma `http`/`https`
-  uniquement) pour éviter les redirections ouvertes vers des schémas
-  dangereux (`javascript:`, `data:`, etc.).
-- Les identifiants de QR sont validés par expression régulière stricte
-  (`[a-z0-9]{1,40}`) avant toute requête SQL, en plus de l'utilisation
-  systématique de requêtes préparées (PDO).
-- Les écritures du compteur de scans sont effectuées dans une transaction
-  SQLite pour rester cohérentes même en cas d'accès concurrents.
+- La page `r/index.html` valide que le paramètre `to` est une URL
+  `http://` ou `https://` avant toute redirection, afin d'empêcher
+  l'injection de schémas dangereux (`javascript:`, `data:`, etc.).
+- Le comptage est "fire-and-forget" : si CountAPI est indisponible,
+  l'utilisateur est redirigé immédiatement, sans blocage.
 
 ## Limitations connues
 
-- L'historique est stocké côté client (`localStorage`); il est donc local
-  au navigateur. Les compteurs de scans, eux, sont fiables car stockés
-  côté serveur (SQLite) et simplement *affichés* via `stats.php`.
-- Sans backend PHP fonctionnel (ex: hébergement statique), le QR code se
-  génère et s'exporte normalement, mais le lien traçable ne redirigera pas
-  tant que `register.php`/`r/index.php` ne sont pas disponibles.
+- **Historique local** : la liste des QR codes générés (URL, date de
+  création, lien traçable) est stockée dans le `localStorage` du
+  navigateur. Elle est donc propre à chaque appareil/navigateur.
+- **Compteurs partagés mais publics** : les compteurs CountAPI sont
+  identifiés par un id aléatoire difficile à deviner, mais l'API est
+  publique — toute personne connaissant l'id pourrait théoriquement lire
+  ou incrémenter le compteur. Suffisant pour un usage personnel/démo,
+  mais pas pour des statistiques sensibles à grande échelle.
+- **Dépendance à un service tiers** : si CountAPI est en panne ou bloqué
+  (ex: extensions anti-tracking), le comptage peut être temporairement
+  indisponible, mais les redirections continuent de fonctionner.
+- Pour un tracking robuste et privé à grande échelle, un backend dédié
+  (avec base de données propre) reste recommandé à terme.
