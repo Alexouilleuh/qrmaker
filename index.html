@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QRafty Clone - Générateur de QR Code</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <header class="header">
+    <h1>🔳 QR Generator</h1>
+    <p class="subtitle">Générez, personnalisez et suivez vos QR codes</p>
+  </header>
+
+  <main class="main-grid">
+    <section class="panel">
+      <h2>Configuration</h2>
+
+      <label for="urlInput">URL à encoder</label>
+      <input type="url" id="urlInput" placeholder="https://exemple.com" value="https://exemple.com">
+
+      <div class="color-row">
+        <div class="color-group">
+          <label for="fgColor">Couleur des modules (noir)</label>
+          <div class="color-input-wrap">
+            <input type="color" id="fgColor" value="#000000">
+            <input type="text" id="fgColorText" value="#000000" maxlength="7">
+          </div>
+        </div>
+
+        <div class="color-group">
+          <label for="bgColor">Couleur du fond (blanc)</label>
+          <div class="color-input-wrap">
+            <input type="color" id="bgColor" value="#ffffff">
+            <input type="text" id="bgColorText" value="#ffffff" maxlength="7">
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="transparentBg">
+            Fond transparent
+          </label>
+        </div>
+      </div>
+
+      <label for="qrSize">Niveau de correction d'erreur</label>
+      <select id="errorLevel">
+        <option value="L">L - Faible (7%)</option>
+        <option value="M" selected>M - Moyen (15%)</option>
+        <option value="Q">Q - Élevé (25%)</option>
+        <option value="H">H - Maximum (30%)</option>
+      </select>
+
+      <div class="tracking-toggle">
+        <label class="checkbox-label">
+          <input type="checkbox" id="enableTracking" checked>
+          Activer le suivi des scans (lien traçable)
+        </label>
+        <p class="hint">Si activé, le QR code encodera une URL de redirection traçable au lieu de l'URL directe.</p>
+      </div>
+
+      <button id="generateBtn" class="btn-primary">Générer le QR Code</button>
+    </section>
+
+    <section class="panel preview-panel">
+      <h2>Aperçu</h2>
+      <div id="qrPreview" class="qr-preview"></div>
+
+      <div class="download-row">
+        <button id="downloadPng" class="btn-secondary" disabled>Télécharger PNG (2000x2000)</button>
+        <button id="downloadSvg" class="btn-secondary" disabled>Télécharger SVG</button>
+      </div>
+
+      <div id="trackingInfo" class="tracking-info hidden">
+        <p><strong>Lien traçable :</strong> <span id="trackingLink"></span></p>
+        <p class="hint">Ce lien encodé redirige vers votre URL tout en comptant les scans.</p>
+      </div>
+    </section>
+  </main>
+
+  <section class="panel history-panel">
+    <h2>📊 Historique & statistiques</h2>
+    <div id="historyEmpty" class="empty-state">Aucun QR code généré pour le moment.</div>
+    <table id="historyTable" class="history-table hidden">
+      <thead>
+        <tr>
+          <th>URL cible</th>
+          <th>Date de création</th>
+          <th>Lien traçable</th>
+          <th>Scans</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </section>
+</div>
+
+<canvas id="renderCanvas" style="display:none;"></canvas>
+
+<script src="script.js"></script>
+</body>
+</html>
